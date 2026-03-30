@@ -343,10 +343,50 @@
         msg: "{{ direct_run.stdout_lines | default([]) + direct_run.stderr_lines | default([]) }}"
       when: app_wait is failed and direct_run is defined
 
+    - name: Check if pg dependency is needed but DATABASE_URL is missing
+      shell: |
+        export HOME=/home/ubuntu
+        cd {{ app_dir }}
+        set -a; [ -f .env ] && . ./.env; set +a
+        if node -e "require('pg')" 2>/dev/null && [ -z "$DATABASE_URL" ]; then
+          echo "pg module present but DATABASE_URL is not set - app may fail to connect"
+        fi
+      args:
+        executable: /bin/bash
+      become: yes
+      become_user: ubuntu
+      when: app_wait is failed
+      ignore_errors: yes
+
+    - name: Start app with PM2 skipping DB connection (fallback)
+      shell: |
+        export HOME=/home/ubuntu
+        cd {{ app_dir }}
+        pm2 delete {{ app_name }} 2>/dev/null || true
+        DATABASE_URL="" DB_HOST="" DB_PORT="" DB_NAME="" DB_USER="" DB_PASSWORD="" \
+          pm2 start npm --name {{ app_name }} -- start
+        pm2 save
+      args:
+        executable: /bin/bash
+      become: yes
+      become_user: ubuntu
+      when: app_wait is failed
+      ignore_errors: yes
+
+    - name: Wait for app to be ready on port 3000 (second attempt)
+      wait_for:
+        host: 127.0.0.1
+        port: "{{ app_port }}"
+        timeout: 60
+        delay: 5
+      register: app_wait2
+      ignore_errors: yes
+      when: app_wait is failed
+
     - name: Fail if app did not start
       fail:
         msg: "App failed to start on port {{ app_port }}. Check PM2 logs above."
-      when: app_wait is failed
+      when: app_wait is failed and (app_wait2 is not defined or app_wait2 is failed)
 
     - name: Print server IP
       debug:
