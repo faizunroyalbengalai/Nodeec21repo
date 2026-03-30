@@ -220,6 +220,7 @@
           DB_PASSWORD={{ node_env_db_password }}
           {% endif %}
           PORT={{ app_port }}
+          HOST=0.0.0.0
 
     # ── npm install ──────────────────────────────────────────────────────────
     - name: Install npm dependencies
@@ -310,6 +311,37 @@
       become: yes
       become_user: ubuntu
       when: app_wait is failed
+
+    - name: Print .env file for debugging
+      shell: cat {{ app_dir }}/.env || true
+      args:
+        executable: /bin/bash
+      when: app_wait is failed
+
+    - name: Print node and npm versions
+      shell: node --version && npm --version || true
+      args:
+        executable: /bin/bash
+      when: app_wait is failed
+
+    - name: Try running app directly to capture error
+      shell: |
+        export HOME=/home/ubuntu
+        cd {{ app_dir }}
+        set -a; [ -f .env ] && . ./.env; set +a
+        timeout 10 node server.js 2>&1 || true
+      args:
+        executable: /bin/bash
+      become: yes
+      become_user: ubuntu
+      when: app_wait is failed
+      register: direct_run
+      ignore_errors: yes
+
+    - name: Show direct run output
+      debug:
+        msg: "{{ direct_run.stdout_lines | default([]) + direct_run.stderr_lines | default([]) }}"
+      when: app_wait is failed and direct_run is defined
 
     - name: Fail if app did not start
       fail:
