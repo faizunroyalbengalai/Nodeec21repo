@@ -364,7 +364,7 @@
         cd {{ app_dir }}
         pm2 delete {{ app_name }} 2>/dev/null || true
         DATABASE_URL="" DB_HOST="" DB_PORT="" DB_NAME="" DB_USER="" DB_PASSWORD="" \
-          pm2 start npm --name {{ app_name }} -- start
+          SKIP_DB_CONNECT=true pm2 start npm --name {{ app_name }} -- start
         pm2 save
       args:
         executable: /bin/bash
