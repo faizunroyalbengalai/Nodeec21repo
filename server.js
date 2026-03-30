@@ -37,6 +37,16 @@ app.get('*', (_req, res) => {
   return res.status(200).send('Node.js app is running');
 });
 
-app.listen(port, host, () => {
+const server = app.listen(port, host, () => {
   console.log(`Server listening on http://%s:%d`, host, port);
+});
+
+server.on('error', (err) => {
+  console.error('Server failed to start:', err);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  process.exit(1);
 });
